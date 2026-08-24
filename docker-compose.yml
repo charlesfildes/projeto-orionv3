@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  mestre-ia:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: projeto-orion:1.0.0
+    container_name: mestre-ia
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MESTRE_IA_AMBIENTE=${MESTRE_IA_AMBIENTE:-prod}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - ./logs:/app/logs
+      - ./dados:/app/dados
+    command: ["--help"]
+    networks:
+      - orion-network
+
+networks:
+  orion-network:
+    driver: bridge
