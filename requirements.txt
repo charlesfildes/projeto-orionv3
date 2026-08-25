@@ -6,9 +6,3 @@ requests>=2.31.0
 numpy>=1.24.0
 httpx>=0.25.0
 pyqpanda
-httpx
-pyqpanda
-pyqpanda
-pyqpanda
-pyqpanda
-pyqpanda
