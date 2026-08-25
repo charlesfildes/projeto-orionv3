@@ -10,3 +10,4 @@ httpx
 pyqpanda
 pyqpanda
 pyqpanda
+pyqpanda
