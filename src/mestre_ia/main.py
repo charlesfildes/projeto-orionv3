@@ -46,17 +46,20 @@ def benchmark_qpanda(
 
     start_time = time.time()
 
-    # CAMINHO 1: Execução em QPU Real da IBM via QCloud
+    # CAMINHO 1: Execução em Hardware Quântico da IBM / Cloud
     if use_real_hardware:
         token = ibm_token or os.getenv("IBM_QUANTUM_TOKEN")
-        if not token:
-            raise HTTPException(status_code=401, detail="IBM_QUANTUM_TOKEN necessário para rodar em HW real.")
+        if not token or token == "SEU_TOKEN_IBM_AQUI":
+            raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum no parâmetro ibm_token.")
         
         try:
             qcloud = pq.QCloud()
-            qcloud.init_qcloud(token)
+            # Inicialização padrão da QCloud no PyQPanda
+            if hasattr(qcloud, "init"):
+                qcloud.init(token)
+            elif hasattr(qcloud, "set_api_key"):
+                qcloud.set_api_key(token)
             
-            # Alocação
             qubits = qcloud.qAlloc_many(num_qubits)
             cbits = qcloud.cAlloc_many(num_qubits)
             
@@ -65,10 +68,7 @@ def benchmark_qpanda(
                 prog << pq.H(q)
             prog << pq.measure_all(qubits, cbits)
             
-            # Envio da tarefa para a fila do supercomputador quântico real
-            task_id = qcloud.full_amplitude_measure(prog, shots)
-            resultado = qcloud.get_result(task_id)
-            
+            resultado = qcloud.full_amplitude_measure(prog, shots)
             tempo_execucao_ms = (time.time() - start_time) * 1000
             
             return {
@@ -77,13 +77,13 @@ def benchmark_qpanda(
                 "qubits_processados": num_qubits,
                 "shots_executados": shots,
                 "tempo_execucao_ms": round(tempo_execucao_ms, 2),
-                "amostra_resultado": dict(list(resultado.items())[:5]),
+                "amostra_resultado": dict(list(resultado.items())[:5]) if isinstance(resultado, dict) else str(resultado),
                 "ambiente": "Hardware Quântico Físico (IBM)"
             }
         except Exception as e:
             return _benchmark_fallback(num_qubits, shots, f"Falha no HW IBM: {str(e)}")
 
-    # CAMINHO 2: Simulação Nativa C++ CPUQVM
+    # CAMINHO 2: Simulação Nativa CPUQVM
     try:
         qvm = pq.CPUQVM()
         qvm.init_qvm()
