@@ -48,26 +48,29 @@ def benchmark_qpanda(
             raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum.")
         
         try:
-            from qiskit import QuantumCircuit
+            from qiskit import QuantumCircuit, transpile
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
             
-            # Deixamos o Qiskit autodetectar o channel e a instance com base no token
             service = QiskitRuntimeService(token=token)
-            
-            # Pega o processador quântico real menos congestionado no momento
             backend = service.least_busy(operational=True, simulator=False)
             
+            # Construção do Circuito (Estado GHZ/Bell)
             qc = QuantumCircuit(num_qubits)
             qc.h(0)
             for i in range(num_qubits - 1):
                 qc.cx(i, i + 1)
             qc.measure_all()
             
+            # Transpilação obrigatória para as portas nativas da QPU escolhida
+            qc_transpiled = transpile(qc, backend=backend)
+            
             sampler = Sampler(mode=backend)
-            job = sampler.run([qc], shots=shots)
+            job = sampler.run([qc_transpiled], shots=shots)
             result = job.result()
             
-            counts = result[0].data.meas.get_counts()
+            # Extração dos resultados das medições
+            pub_result = result[0]
+            counts = dict(pub_result.data.meas.get_counts())
             tempo_execucao_ms = (time.time() - start_time) * 1000
             
             return {
