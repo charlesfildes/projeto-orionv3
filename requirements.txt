@@ -6,3 +6,5 @@ requests>=2.31.0
 numpy>=1.24.0
 httpx>=0.25.0
 pyqpanda
+qiskit
+qiskit-ibm-runtime
