@@ -26,7 +26,7 @@ def health_check():
     return {
         "status": "ok",
         "servico": "Projeto Orion API",
-        "quantum_engines": ["PyQPanda CPUQVM", "IBM Quantum QPU"],
+        "quantum_engines": ["PyQPanda CPUQVM", "IBM Quantum QPU (Qiskit Runtime)"],
     }
 
 @app.post("/quantum/benchmark")
@@ -39,52 +39,52 @@ def benchmark_qpanda(
     if num_qubits < 2 or num_qubits > 127:
         raise HTTPException(status_code=400, detail="Qubits devem estar entre 2 e 127.")
 
-    try:
-        import pyqpanda as pq
-    except ImportError:
-        return _benchmark_fallback(num_qubits, shots, "QPanda não instalado")
-
     start_time = time.time()
 
-    # CAMINHO 1: Execução em Hardware Quântico da IBM / Cloud
+    # CAMINHO 1: Execução em Hardware Quântico REAL da IBM via Qiskit Runtime
     if use_real_hardware:
         token = ibm_token or os.getenv("IBM_QUANTUM_TOKEN")
-        if not token or token == "SEU_TOKEN_IBM_AQUI":
-            raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum no parâmetro ibm_token.")
+        if not token or token == "COLOQUE_SEU_TOKEN_REAL_AQUI":
+            raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum (https://quantum.ibm.com/).")
         
         try:
-            qcloud = pq.QCloud()
-            # Inicialização padrão da QCloud no PyQPanda
-            if hasattr(qcloud, "init"):
-                qcloud.init(token)
-            elif hasattr(qcloud, "set_api_key"):
-                qcloud.set_api_key(token)
+            from qiskit import QuantumCircuit
+            from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
             
-            qubits = qcloud.qAlloc_many(num_qubits)
-            cbits = qcloud.cAlloc_many(num_qubits)
+            # Autenticação na API oficial da IBM
+            service = QiskitRuntimeService(channel="ibm_quantum", token=token)
+            backend = service.least_busy(operational=True, simulator=False)
             
-            prog = pq.QProg()
-            for q in qubits:
-                prog << pq.H(q)
-            prog << pq.measure_all(qubits, cbits)
+            # Criação do circuito Bell / Superposição
+            qc = QuantumCircuit(num_qubits)
+            qc.h(0)
+            for i in range(num_qubits - 1):
+                qc.cx(i, i + 1)
+            qc.measure_all()
             
-            resultado = qcloud.full_amplitude_measure(prog, shots)
+            # Submissão do Job para o QPU físico
+            sampler = Sampler(mode=backend)
+            job = sampler.run([qc], shots=shots)
+            result = job.result()
+            
+            counts = result[0].data.meas.get_counts()
             tempo_execucao_ms = (time.time() - start_time) * 1000
             
             return {
                 "status": "sucesso",
-                "engine": "IBM Quantum Hardware (Real QPU)",
+                "engine": f"IBM Quantum QPU ({backend.name})",
                 "qubits_processados": num_qubits,
                 "shots_executados": shots,
                 "tempo_execucao_ms": round(tempo_execucao_ms, 2),
-                "amostra_resultado": dict(list(resultado.items())[:5]) if isinstance(resultado, dict) else str(resultado),
-                "ambiente": "Hardware Quântico Físico (IBM)"
+                "amostra_resultado": dict(list(counts.items())[:5]),
+                "ambiente": "Hardware Quântico Físico Supercondutor"
             }
         except Exception as e:
-            return _benchmark_fallback(num_qubits, shots, f"Falha no HW IBM: {str(e)}")
+            return _benchmark_fallback(num_qubits, shots, f"Erro IBM Qiskit: {str(e)}")
 
-    # CAMINHO 2: Simulação Nativa CPUQVM
+    # CAMINHO 2: Simulação Nativa C++ PyQPanda CPUQVM
     try:
+        import pyqpanda as pq
         qvm = pq.CPUQVM()
         qvm.init_qvm()
 
