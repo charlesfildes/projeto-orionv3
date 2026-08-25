@@ -44,25 +44,23 @@ def benchmark_qpanda(
     # CAMINHO 1: Execução em Hardware Quântico REAL da IBM via Qiskit Runtime
     if use_real_hardware:
         token = ibm_token or os.getenv("IBM_QUANTUM_TOKEN")
-        if not token or token == "COLOQUE_SEU_TOKEN_REAL_AQUI":
-            raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum (https://quantum.ibm.com/).")
+        if not token:
+            raise HTTPException(status_code=401, detail="Informe um token válido da IBM Quantum.")
         
         try:
             from qiskit import QuantumCircuit
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
             
-            # Autenticação na API oficial da IBM
-            service = QiskitRuntimeService(channel="ibm_quantum", token=token)
+            # Ajuste do canal para o padrão exato da IBM Quantum Platform
+            service = QiskitRuntimeService(channel="ibm_quantum_platform", token=token)
             backend = service.least_busy(operational=True, simulator=False)
             
-            # Criação do circuito Bell / Superposição
             qc = QuantumCircuit(num_qubits)
             qc.h(0)
             for i in range(num_qubits - 1):
                 qc.cx(i, i + 1)
             qc.measure_all()
             
-            # Submissão do Job para o QPU físico
             sampler = Sampler(mode=backend)
             job = sampler.run([qc], shots=shots)
             result = job.result()
