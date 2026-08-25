@@ -34,7 +34,7 @@ async def orquestrar_resposta(payload: ChatPayload):
     prompt_traducao = f"""
     Você é o orquestrador do Projeto Orion.
     Analise o pedido do usuário e determine quantos qubits (1 a 10) e shots (100 a 1000) devem ser simulados.
-    Responda EXCLUSIVAMENTE um JSON no formato: {{"qubits": 3, "shots": 1000}}
+    Responda EXCLUSIVAMENTE em formato json com a estrutura: {{"qubits": 3, "shots": 1000}}
     
     Pedido do usuário: {texto_usuario}
     """
@@ -49,32 +49,40 @@ async def orquestrar_resposta(payload: ChatPayload):
                     "messages": [{"role": "user", "content": prompt_traducao}],
                     "response_format": {"type": "json_object"}
                 },
-                timeout=20.0
+                timeout=25.0
             )
+            if res1.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Erro DeepSeek Etapa 1 ({res1.status_code}): {res1.text}")
+            
             config_quantica = json.loads(res1.json()["choices"][0]["message"]["content"])
-            num_qubits = min(max(config_quantica.get("qubits", 3), 1), 10)
-            shots = min(max(config_quantica.get("shots", 1000), 100), 1000)
+            num_qubits = min(max(int(config_quantica.get("qubits", 3)), 1), 10)
+            shots = min(max(int(config_quantica.get("shots", 1000)), 100), 1000)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro de comunicação com a API DeepSeek (Passo 1): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha de conexão com DeepSeek Etapa 1: {str(e)}")
 
     # 2. Execução da Simulação no Engine PyQPanda
-    import pyqpanda as pq
-    qvm = pq.CPUQVM()
-    qvm.init_qvm()
+    try:
+        import pyqpanda as pq
+        qvm = pq.CPUQVM()
+        qvm.init_qvm()
 
-    qubits = qvm.qAlloc_many(num_qubits)
-    cbits = qvm.cAlloc_many(num_qubits)
+        qubits = qvm.qAlloc_many(num_qubits)
+        cbits = qvm.cAlloc_many(num_qubits)
 
-    prog = pq.QProg()
-    for q in qubits:
-        prog << pq.H(q)
+        prog = pq.QProg()
+        for q in qubits:
+            prog << pq.H(q)
 
-    for i in range(num_qubits - 1):
-        prog << pq.CNOT(qubits[i], qubits[i+1])
+        for i in range(num_qubits - 1):
+            prog << pq.CNOT(qubits[i], qubits[i+1])
 
-    prog << pq.measure_all(qubits, cbits)
-    resultado_bruto = qvm.run_with_configuration(prog, cbits, shots)
-    qvm.finalize()
+        prog << pq.measure_all(qubits, cbits)
+        resultado_bruto = qvm.run_with_configuration(prog, cbits, shots)
+        qvm.finalize()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na execução quântica PyQPanda: {str(e)}")
 
     # 3. DeepSeek Traduz os Resultados Numéricos para Linguagem Simples
     prompt_explicacao = f"""
@@ -96,11 +104,16 @@ async def orquestrar_resposta(payload: ChatPayload):
                     "model": "deepseek-chat",
                     "messages": [{"role": "user", "content": prompt_explicacao}]
                 },
-                timeout=20.0
+                timeout=25.0
             )
+            if res2.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Erro DeepSeek Etapa 3 ({res2.status_code}): {res2.text}")
+                
             resposta_final = res2.json()["choices"][0]["message"]["content"]
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro de comunicação com a API DeepSeek (Passo 3): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha de conexão com DeepSeek Etapa 3: {str(e)}")
 
     return {
         "status": "sucesso",
