@@ -51,8 +51,12 @@ def benchmark_qpanda(
             from qiskit import QuantumCircuit
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
             
-            # Ajuste do canal para o padrão exato da IBM Quantum Platform
-            service = QiskitRuntimeService(channel="ibm_quantum_platform", token=token)
+            # Autenticação com instância explícita do plano open
+            service = QiskitRuntimeService(
+                channel="ibm_quantum_platform", 
+                token=token,
+                instance="ibm-q/open/main"
+            )
             backend = service.least_busy(operational=True, simulator=False)
             
             qc = QuantumCircuit(num_qubits)
