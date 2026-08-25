@@ -254,3 +254,43 @@ def benchmark_qpanda(num_qubits: int = 18, shots: int = 1000):
         "tempo_execucao_ms": round(tempo_execucao_ms, 2),
         "amostra_resultado": dict(list(resultado.items())[:5])
     }
+
+@app.post("/quantum/benchmark")
+def benchmark_qpanda(num_qubits: int = 18, shots: int = 1000):
+    import time
+    import pyqpanda as pq
+
+    start_time = time.time()
+
+    qvm = pq.CPUQVM()
+    qvm.init_qvm()
+
+    qubits = qvm.qAlloc_many(num_qubits)
+    cbits = qvm.cAlloc_many(num_qubits)
+
+    prog = pq.QProg()
+    for q in qubits:
+        prog << pq.H(q)
+
+    for i in range(num_qubits - 1):
+        prog << pq.CNOT(qubits[i], qubits[i+1])
+
+    prog << pq.measure_all(qubits, cbits)
+    resultado = qvm.run_with_configuration(prog, cbits, shots)
+
+    tempo_execucao_ms = (time.time() - start_time) * 1000
+    estados_simultaneos = 2 ** num_qubits
+    operacoes_totais = estados_simultaneos * shots
+
+    qvm.finalize()
+
+    return {
+        "status": "sucesso",
+        "engine": "PyQPanda CPUQVM",
+        "qubits_processados": num_qubits,
+        "espaco_de_estados_hilbert": f"2^{num_qubits} = {estados_simultaneos:,} estados simultaneos",
+        "shots_executados": shots,
+        "operacoes_equivalentes": f"{operacoes_totais:,}",
+        "tempo_execucao_ms": round(tempo_execucao_ms, 2),
+        "amostra_resultado": dict(list(resultado.items())[:5])
+    }
