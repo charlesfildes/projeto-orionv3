@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -19,44 +18,44 @@ class ChatPayload(BaseModel):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "servico": "Projeto Orion API"}
+    return {"status": "ok", "servico": "Projeto Orion API", "deepseek_key_configurada": bool(DEEPSEEK_API_KEY)}
 
 @app.post("/orquestrador/executar")
 async def orquestrar_resposta(payload: ChatPayload):
+    import httpx
     texto_usuario = payload.prompt or payload.mensagem
     if not texto_usuario:
         raise HTTPException(status_code=400, detail="Prompt não informado.")
 
     if not DEEPSEEK_API_KEY:
-        raise HTTPException(status_code=500, detail="DEEPSEEK_API_KEY não configurada no servidor.")
+        raise HTTPException(status_code=500, detail="DEEPSEEK_API_KEY não configurada no ambiente do Cloud Run.")
 
-    # 1. DeepSeek Traduz Linguagem Natural para Parâmetros do Circuito Quântico
+    # 1. DeepSeek Traduz Linguagem Natural para Parâmetros Quânticos
     prompt_traducao = f"""
     Você é o orquestrador do Projeto Orion.
     Analise o pedido do usuário e determine quantos qubits (1 a 10) e shots (100 a 1000) devem ser simulados.
-    Responda EXCLUSIVAMENTE um JSON no formato: {{"qubits": 2, "shots": 1000, "explicacao_tecnica": "motivo"}}
+    Responda EXCLUSIVAMENTE um JSON no formato: {{"qubits": 3, "shots": 1000}}
     
     Pedido do usuário: {texto_usuario}
     """
 
-    async with httpx.AsyncClient() as client:
-        res1 = await client.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt_traducao}],
-                "response_format": {"type": "json_object"}
-            },
-            timeout=30.0
-        )
-        
-        if res1.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Erro na API DeepSeek: {res1.text}")
-
-        config_quantica = json.loads(res1.json()["choices"][0]["message"]["content"])
-        num_qubits = min(max(config_quantica.get("qubits", 2), 1), 10)
-        shots = min(max(config_quantica.get("shots", 1000), 100), 1000)
+    try:
+        async with httpx.AsyncClient() as client:
+            res1 = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt_traducao}],
+                    "response_format": {"type": "json_object"}
+                },
+                timeout=20.0
+            )
+            config_quantica = json.loads(res1.json()["choices"][0]["message"]["content"])
+            num_qubits = min(max(config_quantica.get("qubits", 3), 1), 10)
+            shots = min(max(config_quantica.get("shots", 1000), 100), 1000)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro de comunicação com a API DeepSeek (Passo 1): {str(e)}")
 
     # 2. Execução da Simulação no Engine PyQPanda
     import pyqpanda as pq
@@ -88,18 +87,20 @@ async def orquestrar_resposta(payload: ChatPayload):
     Explique esse resultado de forma didática, simples e acessível em português para o usuário.
     """
 
-    async with httpx.AsyncClient() as client:
-        res2 = await client.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt_explicacao}]
-            },
-            timeout=30.0
-        )
-        
-        resposta_final = res2.json()["choices"][0]["message"]["content"]
+    try:
+        async with httpx.AsyncClient() as client:
+            res2 = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt_explicacao}]
+                },
+                timeout=20.0
+            )
+            resposta_final = res2.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro de comunicação com a API DeepSeek (Passo 3): {str(e)}")
 
     return {
         "status": "sucesso",
