@@ -8,3 +8,4 @@ httpx>=0.25.0
 pyqpanda
 httpx
 pyqpanda
+pyqpanda
