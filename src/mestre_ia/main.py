@@ -51,12 +51,10 @@ def benchmark_qpanda(
             from qiskit import QuantumCircuit
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
             
-            # Autenticação com instância explícita do plano open
-            service = QiskitRuntimeService(
-                channel="ibm_quantum_platform", 
-                token=token,
-                instance="ibm-q/open/main"
-            )
+            # Deixamos o Qiskit autodetectar o channel e a instance com base no token
+            service = QiskitRuntimeService(token=token)
+            
+            # Pega o processador quântico real menos congestionado no momento
             backend = service.least_busy(operational=True, simulator=False)
             
             qc = QuantumCircuit(num_qubits)
